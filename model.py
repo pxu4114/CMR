@@ -40,25 +40,36 @@ def EncoderImage(data_name, img_dim, embed_size, finetune=False,
 
 class EncodeAudioPrecomp(nn.Module):
 
-	def __init__(self, aud_dim, embed_size):
-		super(EncodeAudioPrecomp, self).__init__()
-		self.embed_size = embed_size
-		self.fc = nn.Linear(aud_dim, embed_size)
-		self.fc1 = nn.Linear(embed_size, embed_size)
-		self.init_weights()
-	def init_weights(self):
-		"""Xavier initialization for the fully connected layer
-		"""
-		r = np.sqrt(6.) / np.sqrt(self.fc.in_features +
-								  self.fc.out_features)
-		self.fc.weight.data.uniform_(-r, r)
-		self.fc.bias.data.fill_(0)        
-		
-	def forward(self, audios):
-		# pdb.set_trace()
-		features = self.fc(audios)
-		# features = self.fc1(features)
-		return features
+    def __init__(self, aud_dim, embed_size, use_abs=False, no_imgnorm=False):
+        super(EncodeAudioPrecomp, self).__init__()
+        self.embed_size = embed_size
+        self.use_abs = use_abs
+        self.no_imgnorm = no_imgnorm
+        self.fc = nn.Linear(aud_dim, embed_size)
+        self.fc1 = nn.Linear(embed_size, embed_size)
+        self.relu = nn.ReLU(inplace=True)
+        self.init_weights()
+    def init_weights(self):
+        """Xavier initialization for the fully connected layer
+        """
+        r = np.sqrt(6.) / np.sqrt(self.fc.in_features +
+                                  self.fc.out_features)
+        self.fc.weight.data.uniform_(-r, r)
+        self.fc.bias.data.fill_(0)        
+        
+    def forward(self, audios):
+        # pdb.set_trace()
+        features = self.fc(audios)
+        features = self.relu(features)
+        features = self.fc1(features)
+        # normalization in the joint embedding space
+        # if not self.no_imgnorm:
+        features = l2norm(features)
+
+        # take the absolute value of the embedding (used in order embeddings)
+        if self.use_abs:
+            features = torch.abs(features)        
+        return features
         
 
 # tutorials/09 - Image Captioning
@@ -168,7 +179,7 @@ class EncoderImagePrecomp(nn.Module):
 
         self.fc = nn.Linear(img_dim, embed_size)
         self.fc1 = nn.Linear(embed_size, embed_size)
-
+        self.relu = nn.ReLU(inplace=True)
         self.init_weights()
 
     def init_weights(self):
@@ -186,6 +197,7 @@ class EncoderImagePrecomp(nn.Module):
         features = self.fc(images)
         # pdb.set_trace()
         # CVS layer
+        # features = self.relu(features)
         # features = self.fc1(features)
 
         # normalize in the joint embedding space
@@ -250,9 +262,9 @@ class EncoderText(nn.Module):
         I = torch.LongTensor(lengths).view(-1, 1, 1)
         I = Variable(I.expand(x.size(0), 1, self.embed_size)-1).cuda()
         out = torch.gather(padded[0], 1, I).squeeze(1)
-        # pdb.set_trace()
+
         # CVS layer
-        out = self.fc(out)
+        # out = self.fc(out)
         # out = self.fc(out)
 
         # normalization in the joint embedding space
@@ -281,48 +293,49 @@ def order_sim(im, s):
 
 
 class ContrastiveLoss(nn.Module):
-    """
-    Compute contrastive loss
-    """
+	"""
+	Compute contrastive loss
+	"""
 
-    def __init__(self, margin=0, measure=False, max_violation=False):
-        super(ContrastiveLoss, self).__init__()
-        self.margin = margin
-        if measure == 'order':
-            self.sim = order_sim
-        else:
-            self.sim = cosine_sim
+	def __init__(self, margin=0, measure=False, max_violation=False):
+		super(ContrastiveLoss, self).__init__()
+		self.margin = margin
+		if measure == 'order':
+			self.sim = order_sim
+		else:
+			self.sim = cosine_sim
 
-        self.max_violation = max_violation
+		self.max_violation = max_violation
 
-    def forward(self, im, s):
-        # compute image-sentence score matrix
-        scores = self.sim(im, s)
-        diagonal = scores.diag().view(im.size(0), 1)
-        d1 = diagonal.expand_as(scores)
-        d2 = diagonal.t().expand_as(scores)
+	def forward(self, im, s):
+		# compute image-sentence score matrix
+		# pdb.set_trace()
+		scores = self.sim(im, s)
+		diagonal = scores.diag().view(im.size(0), 1)
+		d1 = diagonal.expand_as(scores)
+		d2 = diagonal.t().expand_as(scores)
 
-        # compare every diagonal score to scores in its column
-        # caption retrieval
-        cost_s = (self.margin + scores - d1).clamp(min=0)
-        # compare every diagonal score to scores in its row
-        # image retrieval
-        cost_im = (self.margin + scores - d2).clamp(min=0)
+		# compare every diagonal score to scores in its column
+		# caption retrieval
+		cost_s = (self.margin + scores - d1).clamp(min=0)
+		# compare every diagonal score to scores in its row
+		# image retrieval
+		cost_im = (self.margin + scores - d2).clamp(min=0)
 
-        # clear diagonals
-        mask = torch.eye(scores.size(0)) > .5
-        I = Variable(mask)
-        if torch.cuda.is_available():
-            I = I.cuda()
-        cost_s = cost_s.masked_fill_(I, 0)
-        cost_im = cost_im.masked_fill_(I, 0)
+		# clear diagonals
+		mask = torch.eye(scores.size(0)) > .5
+		I = Variable(mask)
+		if torch.cuda.is_available():
+			I = I.cuda()
+		cost_s = cost_s.masked_fill_(I, 0)
+		cost_im = cost_im.masked_fill_(I, 0)
 
-        # keep the maximum violating negative for each query
-        if self.max_violation:
-            cost_s = cost_s.max(1)[0]
-            cost_im = cost_im.max(0)[0]
+		# keep the maximum violating negative for each query
+		if self.max_violation:
+			cost_s = cost_s.max(1)[0]
+			cost_im = cost_im.max(0)[0]
 
-        return cost_s.sum() + cost_im.sum()
+		return cost_s.sum() + cost_im.sum()
 
 
 class VSE(object):
@@ -356,7 +369,7 @@ class VSE(object):
 										 max_violation=opt.max_violation)
 		
 		# if opt.train_with_audio:
-		params = list(self.aud_enc.parameters()) + list(self.txt_enc.parameters()) + list(self.img_enc.fc.parameters())
+		params = list(self.img_enc.fc.parameters()) + list(self.txt_enc.parameters()) + list(self.aud_enc.parameters())
 		if opt.finetune:
 			params += list(self.img_enc.cnn.parameters())
 		self.params = params
@@ -369,7 +382,7 @@ class VSE(object):
         state_dict = [self.img_enc.state_dict(), self.txt_enc.state_dict(), self.aud_enc.state_dict()]
         return state_dict
 
-    def load_state_dict(self, train_with_audio, state_dict):   
+    def load_state_dict(self, state_dict):   
         self.img_enc.load_state_dict(state_dict[0])
         self.txt_enc.load_state_dict(state_dict[1])
         self.aud_enc.load_state_dict(state_dict[2])
@@ -377,8 +390,12 @@ class VSE(object):
     def train_start(self):
 		"""switch to train mode
 		"""
-		# for param in self.aud_enc.parameters():
-			# param.requires_grad = False		
+		for param in self.aud_enc.parameters():
+			param.requires_grad = False	
+		# for param in self.img_enc.parameters():
+			# param.requires_grad = True
+		# for param in self.txt_enc.parameters():
+			# param.requires_grad = True	            
 		self.img_enc.train()
 		self.txt_enc.train()    
         
@@ -386,36 +403,38 @@ class VSE(object):
 		"""switch to train mode
 		"""
 		# self.img_enc.eval()
-		# for param in self.img_enc.parameters():
-			# param.requires_grad = False
-		# for param in self.txt_enc.parameters():
-			# param.requires_grad = False				
+		for param in self.img_enc.parameters():
+			param.requires_grad = True
+		for param in self.txt_enc.parameters():
+			param.requires_grad = False				
+		for param in self.aud_enc.parameters():
+			param.requires_grad = True	
+		self.img_enc.train()	
 		self.aud_enc.train()
-
     def val_start(self):
         """switch to evaluate mode
         """
         self.img_enc.eval()
         self.txt_enc.eval()
+        self.aud_enc.eval()
 
-    def forward_emb(self, images, target, lengths, volatile=False):
-		"""Compute the image and caption embeddings
-		"""
-		# Set mini-batch dataset
-		images = Variable(images, volatile=volatile)
-		target = Variable(target, volatile=volatile)
-		if torch.cuda.is_available():
-			images = images.cuda()
-			target = target.cuda()
+    def forward_emb(self, images, captions, audios, lengths, volatile=False):
+        """Compute the image and caption embeddings
+        """
+        # Set mini-batch dataset
+        images = Variable(images, volatile=volatile)
+        captions = Variable(captions, volatile=volatile)		
+        audios = Variable(audios, volatile=volatile)		
+        if torch.cuda.is_available():
+            images = images.cuda()
+            captions = captions.cuda()
+            audios = audios.cuda()
 
-		# Forward
-		if lengths==None:
-			img_emb = self.img_enc(images)
-			tar_emb = self.aud_enc(target)        
-		else:
-			img_emb = self.img_enc(images)
-			tar_emb = self.txt_enc(target, lengths)
-		return img_emb, tar_emb
+        # Forward
+        img_emb = self.img_enc(images)
+        cap_emb = self.txt_enc(captions, lengths)
+        aud_emb = self.aud_enc(audios)        
+        return img_emb, cap_emb, aud_emb
 
     def forward_loss(self, img_emb, cap_emb, **kwargs):
         """Compute the loss given pairs of image and caption embeddings
@@ -432,15 +451,15 @@ class VSE(object):
 		self.logger.update('lr', self.optimizer.param_groups[0]['lr'])
 
 		# compute the embeddings
-		if train_with_audio:
-			img_emb, tar_emb = self.forward_emb(images, audios, lengths=None)
-		else:
-			img_emb, tar_emb = self.forward_emb(images, captions, lengths)
-
+		img_emb, cap_emb, aud_emb = self.forward_emb(images, captions, audios, lengths=lengths)
+		# pdb.set_trace()
 		# measure accuracy and record loss
 		self.optimizer.zero_grad()
-		loss = self.forward_loss(img_emb, tar_emb)
-
+		if train_with_audio:
+			loss = self.forward_loss(img_emb, aud_emb)
+		else:
+			loss = self.forward_loss(img_emb,cap_emb)
+		
 		# compute gradient and do SGD step
 		loss.backward()
 		if self.grad_clip > 0:
