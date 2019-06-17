@@ -19,8 +19,8 @@ def l2norm(X):
     X = torch.div(X, norm)
     return X
 
-def EncodeAudio(aud_dim, embed_size):
-	aud_enc = EncodeAudioPrecomp(aud_dim, embed_size)
+def EncodeAudio(aud_dim, embed_size, use_abs=False, no_imgnorm=False):
+	aud_enc = EncodeAudioPrecomp(aud_dim, embed_size, use_abs, no_imgnorm)
 	return aud_enc
 
 def EncoderImage(data_name, img_dim, embed_size, finetune=False,
@@ -46,8 +46,8 @@ class EncodeAudioPrecomp(nn.Module):
         self.use_abs = use_abs
         self.no_imgnorm = no_imgnorm
         self.fc = nn.Linear(aud_dim, embed_size)
-        self.fc1 = nn.Linear(embed_size, embed_size)
-        self.relu = nn.ReLU(inplace=True)
+        # self.fc1 = nn.Linear(embed_size, embed_size)
+        # self.relu = nn.ReLU(inplace=True)
         self.init_weights()
     def init_weights(self):
         """Xavier initialization for the fully connected layer
@@ -60,11 +60,12 @@ class EncodeAudioPrecomp(nn.Module):
     def forward(self, audios):
         # pdb.set_trace()
         features = self.fc(audios)
-        features = self.relu(features)
-        features = self.fc1(features)
+        # features = self.relu(features)
+        # features = self.fc1(features)
+		
         # normalization in the joint embedding space
-        # if not self.no_imgnorm:
-        features = l2norm(features)
+        if not self.no_imgnorm:
+			features = l2norm(features)
 
         # take the absolute value of the embedding (used in order embeddings)
         if self.use_abs:
@@ -355,7 +356,7 @@ class VSE(object):
 								   opt.embed_size, opt.num_layers,
 								   use_abs=opt.use_abs)
 								   
-		self.aud_enc = EncodeAudio(opt.aud_dim, opt.embed_size)  
+		self.aud_enc = EncodeAudio(opt.aud_dim, opt.embed_size, use_abs=opt.use_abs)  
 		
 		if torch.cuda.is_available():
 			self.img_enc.cuda()
