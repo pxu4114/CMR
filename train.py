@@ -60,7 +60,7 @@ def main():
 						help='Use max instead of sum in the rank loss.')
 	parser.add_argument('--img_dim', default=4096, type=int,
 						help='Dimensionality of the image embedding.')    
-	parser.add_argument('--aud_dim', default=29, type=int,
+	parser.add_argument('--aud_dim', default=40, type=int,
 						help='Dimensionality of the image embedding.')
 	parser.add_argument('--finetune', action='store_true',
 						help='Fine-tune the image encoder.')
@@ -116,27 +116,27 @@ def main():
 		else:
 			print("=> no checkpoint found at '{}'".format(opt.resume))
 
-	# Train the Model
-	best_rsum = 0
-	for epoch in range(opt.num_epochs):
-		adjust_learning_rate(opt, model.optimizer, epoch)
+	# # Train the Model
+	# best_rsum = 0
+	# for epoch in range(opt.num_epochs):
+		# adjust_learning_rate(opt, model.optimizer, epoch)
 
-		# train for one epoch			
-		train(opt, train_loader, model, epoch, val_loader, audio=False)
+		# # train for one epoch			
+		# train(opt, train_loader, model, epoch, val_loader, audio=False)
 
-		# evaluate on validation set
-		rsum = validate(opt, val_loader, model, audio=False)
+		# # evaluate on validation set
+		# rsum = validate(opt, val_loader, model, audio=False)
 
-		# remember best R@ sum and save checkpoint
-		is_best = rsum > best_rsum
-		best_rsum = max(rsum, best_rsum)
-		save_checkpoint({
-			'epoch': epoch + 1,
-			'model': model.state_dict(),
-			'best_rsum': best_rsum,
-			'opt': opt,
-			'Eiters': model.Eiters,
-		}, is_best, prefix=opt.logger_name + '/')
+		# # remember best R@ sum and save checkpoint
+		# is_best = rsum > best_rsum
+		# best_rsum = max(rsum, best_rsum)
+		# save_checkpoint({
+			# 'epoch': epoch + 1,
+			# 'model': model.state_dict(),
+			# 'best_rsum': best_rsum,
+			# 'opt': opt,
+			# 'Eiters': model.Eiters,
+		# }, is_best, prefix=opt.logger_name + '/')
 
 	# Training image and audio with pretrained image model weights 
 	# without updating image model weights

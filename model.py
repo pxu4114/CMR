@@ -46,8 +46,6 @@ class EncodeAudioPrecomp(nn.Module):
         self.use_abs = use_abs
         self.no_imgnorm = no_imgnorm
         self.fc = nn.Linear(aud_dim, embed_size)
-        # self.fc1 = nn.Linear(embed_size, embed_size)
-        # self.relu = nn.ReLU(inplace=True)
         self.init_weights()
     def init_weights(self):
         """Xavier initialization for the fully connected layer
@@ -60,9 +58,7 @@ class EncodeAudioPrecomp(nn.Module):
     def forward(self, audios):
         # pdb.set_trace()
         features = self.fc(audios)
-        # features = self.relu(features)
-        # features = self.fc1(features)
-		
+        
         # normalization in the joint embedding space
         if not self.no_imgnorm:
 			features = l2norm(features)
@@ -179,8 +175,6 @@ class EncoderImagePrecomp(nn.Module):
         self.use_abs = use_abs
 
         self.fc = nn.Linear(img_dim, embed_size)
-        self.fc1 = nn.Linear(embed_size, embed_size)
-        self.relu = nn.ReLU(inplace=True)
         self.init_weights()
 
     def init_weights(self):
@@ -196,10 +190,6 @@ class EncoderImagePrecomp(nn.Module):
         # assuming that the precomputed features are already l2-normalized
 
         features = self.fc(images)
-        # pdb.set_trace()
-        # CVS layer
-        # features = self.relu(features)
-        # features = self.fc1(features)
 
         # normalize in the joint embedding space
         if not self.no_imgnorm:
@@ -239,9 +229,6 @@ class EncoderText(nn.Module):
 
         # caption embedding
         self.rnn = nn.GRU(word_dim, embed_size, num_layers, batch_first=True)
-        
-        # CVS layer
-        self.fc = nn.Linear(1024, embed_size)
 
         self.init_weights()
 
@@ -263,10 +250,6 @@ class EncoderText(nn.Module):
         I = torch.LongTensor(lengths).view(-1, 1, 1)
         I = Variable(I.expand(x.size(0), 1, self.embed_size)-1).cuda()
         out = torch.gather(padded[0], 1, I).squeeze(1)
-
-        # CVS layer
-        # out = self.fc(out)
-        # out = self.fc(out)
 
         # normalization in the joint embedding space
         out = l2norm(out)
@@ -405,13 +388,14 @@ class VSE(object):
 		"""
 		# self.img_enc.eval()
 		for param in self.img_enc.parameters():
-			param.requires_grad = True
+			param.requires_grad = False
 		for param in self.txt_enc.parameters():
-			param.requires_grad = False				
+			param.requires_grad = True				
 		for param in self.aud_enc.parameters():
 			param.requires_grad = True	
-		self.img_enc.train()	
+		# self.img_enc.train()	
 		self.aud_enc.train()
+		self.txt_enc.train()
     def val_start(self):
         """switch to evaluate mode
         """
@@ -457,7 +441,7 @@ class VSE(object):
 		# measure accuracy and record loss
 		self.optimizer.zero_grad()
 		if train_with_audio:
-			loss = self.forward_loss(img_emb, aud_emb)
+			loss = self.forward_loss(cap_emb, aud_emb)
 		else:
 			loss = self.forward_loss(img_emb,cap_emb)
 		

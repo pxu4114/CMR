@@ -12,21 +12,13 @@ import torch
 import torch.nn as nn
 import torchvision.models as models
 from torch.autograd import Variable
-
-def remap(arr):
-	old_size = arr.shape[1]
-	new_shape = 100
-	new_arr = np.zeros((arr.shape[0],new_shape))
-	new_idxs = [i*old_size//new_shape + old_size//(2*new_shape) for i in range(new_shape)]
-	for n,idx in enumerate(new_idxs):
-		new_arr[:,n] = arr[:,idx]
-	return new_arr
     
     
 def audioToInputVector(audio, fs, numcep, nfilt):
-	# Get MFCC coefficients
-	features = mfcc(audio, samplerate=fs, numcep=numcep, nfilt=nfilt)
-	return features
+    # Get MFCC coefficients
+    # features = mfcc(audio, samplerate=fs, numcep=numcep, nfilt=nfilt)
+    features = np.mean(librosa.feature.mfcc(y=audio, sr=fs, n_mfcc=numcep).T,axis=0) 
+    return features
 
 
 def audiofile_to_input_vector(audio_filename, numcep, nfilt):
@@ -35,10 +27,8 @@ def audiofile_to_input_vector(audio_filename, numcep, nfilt):
     at every time step.
     '''
     # Load .wav file
-    fs, audio = wav.read(audio_filename)
-    #pdb.set_trace()
-    return audioToInputVector(np.int16(audio), fs, numcep, nfilt)
-    return audioToInputVector(np.float32(audio), fs, n_mfcc)
+    audio, fs = librosa.load(audio_filename)
+    return audioToInputVector(np.float32(audio), fs, numcep, nfilt)
 
 def main(args):
     mode = args.mode
@@ -67,12 +57,9 @@ def main(args):
     mean_stack = np.array([])
     for i in range(0,len(audio)):
         if i%100 == 0 and i!=0 : print('extracted {}/{}'.format(i, len(audio)))
-        # af = audiofile_to_input_vector(os.path.join(args.data_path, audio[i]),29)
-        af = audiofile_to_input_vector(os.path.join(args.data_path, audio[i]),29,29)
+        af = audiofile_to_input_vector(os.path.join(args.data_path, audio[i]),40,29)
         # pdb.set_trace()
-        mean_af = np.mean(af,axis=0)
-        avg = np.mean(af,axis=0)
-        avg = np.reshape(avg,(1,29))
+        avg = np.reshape(af,(1,40))
         
         if len(audio_stack.shape)>1:
             audio_stack = np.vstack((audio_stack,avg))
