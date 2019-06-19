@@ -40,33 +40,41 @@ def EncoderImage(data_name, img_dim, embed_size, finetune=False,
 
 class EncodeAudioPrecomp(nn.Module):
 
-    def __init__(self, aud_dim, embed_size, use_abs=False, no_imgnorm=False):
-        super(EncodeAudioPrecomp, self).__init__()
-        self.embed_size = embed_size
-        self.use_abs = use_abs
-        self.no_imgnorm = no_imgnorm
-        self.fc = nn.Linear(aud_dim, embed_size)
-        self.init_weights()
-    def init_weights(self):
-        """Xavier initialization for the fully connected layer
-        """
-        r = np.sqrt(6.) / np.sqrt(self.fc.in_features +
-                                  self.fc.out_features)
-        self.fc.weight.data.uniform_(-r, r)
-        self.fc.bias.data.fill_(0)        
-        
-    def forward(self, audios):
-        # pdb.set_trace()
-        features = self.fc(audios)
-        
-        # normalization in the joint embedding space
-        if not self.no_imgnorm:
-			features = l2norm(features)
+	def __init__(self, aud_dim, embed_size, use_abs=False, no_imgnorm=False):
+		super(EncodeAudioPrecomp, self).__init__()
+		self.embed_size = embed_size
+		self.use_abs = use_abs
+		self.no_imgnorm = no_imgnorm
+		self.fc = nn.Linear(aud_dim, embed_size)
+		self.relu = nn.ReLU(inplace=True)
+		self.fc1 = nn.Linear(embed_size, embed_size)
+		# self.fc2 = nn.Linear(embed_size, embed_size)
+		self.tanh = nn.Tanh()
+		# self.init_weights()
+	def init_weights(self):
+		"""Xavier initialization for the fully connected layer
+		"""
+		r = np.sqrt(6.) / np.sqrt(self.fc.in_features +
+								  self.fc.out_features)
+		self.fc.weight.data.uniform_(-r, r)
+		self.fc.bias.data.fill_(0)        
+		
+	def forward(self, audios):
+		# pdb.set_trace()
+		features = self.fc(audios)
+		features = self.relu(features)
+		features = self.fc1(features)		
+		# features = self.tanh(features)
+		# features = self.fc1(features)
+		
+		# normalization in the joint embedding space
+		# if not self.no_imgnorm:
+		features = l2norm(features)
 
-        # take the absolute value of the embedding (used in order embeddings)
-        if self.use_abs:
-            features = torch.abs(features)        
-        return features
+		# take the absolute value of the embedding (used in order embeddings)
+		if self.use_abs:
+			features = torch.abs(features)        
+		return features
         
 
 # tutorials/09 - Image Captioning
@@ -186,20 +194,20 @@ class EncoderImagePrecomp(nn.Module):
         self.fc.bias.data.fill_(0)
 
     def forward(self, images):
-        """Extract image feature vectors."""
-        # assuming that the precomputed features are already l2-normalized
+		"""Extract image feature vectors."""
+		# assuming that the precomputed features are already l2-normalized
 
-        features = self.fc(images)
+		features = self.fc(images)
 
-        # normalize in the joint embedding space
-        if not self.no_imgnorm:
-            features = l2norm(features)
+		# normalize in the joint embedding space
+		# if not self.no_imgnorm:
+		features = l2norm(features)
 
-        # take the absolute value of embedding (used in order embeddings)
-        if self.use_abs:
-            features = torch.abs(features)
+		# take the absolute value of embedding (used in order embeddings)
+		if self.use_abs:
+			features = torch.abs(features)
 
-        return features
+		return features
 
     def load_state_dict(self, state_dict):
         """Copies parameters. overwritting the default one to
@@ -260,6 +268,14 @@ class EncoderText(nn.Module):
 
         return out
 
+class shared_layer(nn.Module):
+
+    def __init__(self, embed_size, use_abs=False):
+        super(shared_layer, self).__init__()
+        self.fc = nn.Linear(embed_size, embed_size)
+        
+    def forward(self, emb_a, emb_b):
+        return self.fc(emb_a), self.fc(emb_b)
 
 def cosine_sim(im, s):
     """Cosine similarity between all the image and sentence pairs
@@ -328,39 +344,42 @@ class VSE(object):
     """
 
     def __init__(self, opt):
-		# tutorials/09 - Image Captioning
-		# Build Models
-		self.grad_clip = opt.grad_clip
-		self.img_enc = EncoderImage(opt.data_name, opt.img_dim, opt.embed_size,
-									opt.finetune, opt.cnn_type,
-									use_abs=opt.use_abs,
-									no_imgnorm=opt.no_imgnorm)
-		self.txt_enc = EncoderText(opt.vocab_size, opt.word_dim,
-								   opt.embed_size, opt.num_layers,
-								   use_abs=opt.use_abs)
-								   
-		self.aud_enc = EncodeAudio(opt.aud_dim, opt.embed_size, use_abs=opt.use_abs)  
-		
-		if torch.cuda.is_available():
-			self.img_enc.cuda()
-			self.txt_enc.cuda()
-			self.aud_enc.cuda()
-			cudnn.benchmark = True
+        # tutorials/09 - Image Captioning
+        # Build Models
+        self.grad_clip = opt.grad_clip
+        self.img_enc = EncoderImage(opt.data_name, opt.img_dim, opt.embed_size,
+                                    opt.finetune, opt.cnn_type,
+                                    use_abs=opt.use_abs,
+                                    no_imgnorm=opt.no_imgnorm)
+        self.txt_enc = EncoderText(opt.vocab_size, opt.word_dim,
+                                   opt.embed_size, opt.num_layers,
+                                   use_abs=opt.use_abs)
+                                   
+        self.aud_enc = EncodeAudio(opt.aud_dim, opt.embed_size, use_abs=opt.use_abs) 
 
-		# Loss and Optimizer
-		self.criterion = ContrastiveLoss(margin=opt.margin,
-										 measure=opt.measure,
-										 max_violation=opt.max_violation)
-		
-		# if opt.train_with_audio:
-		params = list(self.img_enc.fc.parameters()) + list(self.txt_enc.parameters()) + list(self.aud_enc.parameters())
-		if opt.finetune:
-			params += list(self.img_enc.cnn.parameters())
-		self.params = params
+        self.shared_layer = shared_layer(opt.embed_size, use_abs=opt.use_abs)
+        
+        if torch.cuda.is_available():
+            self.img_enc.cuda()
+            self.txt_enc.cuda()
+            self.aud_enc.cuda()
+            self.shared_layer.cuda()
+            cudnn.benchmark = True
 
-		self.optimizer = torch.optim.Adam(params, lr=opt.learning_rate)
+        # Loss and Optimizer
+        self.criterion = ContrastiveLoss(margin=opt.margin,
+                                         measure=opt.measure,
+                                         max_violation=opt.max_violation)
+        
+        # if opt.train_with_audio:
+        params = list(self.img_enc.fc.parameters()) + list(self.txt_enc.parameters()) + list(self.aud_enc.parameters())
+        if opt.finetune:
+            params += list(self.img_enc.cnn.parameters())
+        self.params = params
 
-		self.Eiters = 0
+        self.optimizer = torch.optim.Adam(params, lr=opt.learning_rate)
+
+        self.Eiters = 0
 
     def state_dict(self):
         state_dict = [self.img_enc.state_dict(), self.txt_enc.state_dict(), self.aud_enc.state_dict()]
@@ -372,30 +391,30 @@ class VSE(object):
         self.aud_enc.load_state_dict(state_dict[2])
 
     def train_start(self):
-		"""switch to train mode
-		"""
-		for param in self.aud_enc.parameters():
-			param.requires_grad = False	
-		# for param in self.img_enc.parameters():
-			# param.requires_grad = True
-		# for param in self.txt_enc.parameters():
-			# param.requires_grad = True	            
-		self.img_enc.train()
-		self.txt_enc.train()    
+        """switch to train mode
+        """
+        for param in self.aud_enc.parameters():
+            param.requires_grad = False	
+        # for param in self.img_enc.parameters():
+            # param.requires_grad = True
+        # for param in self.txt_enc.parameters():
+            # param.requires_grad = True	            
+        self.img_enc.train()
+        self.txt_enc.train()    
         
     def train2_start(self):
-		"""switch to train mode
-		"""
-		# self.img_enc.eval()
-		for param in self.img_enc.parameters():
-			param.requires_grad = False
-		for param in self.txt_enc.parameters():
-			param.requires_grad = True				
-		for param in self.aud_enc.parameters():
-			param.requires_grad = True	
-		# self.img_enc.train()	
-		self.aud_enc.train()
-		self.txt_enc.train()
+        """switch to train mode
+        """
+        # self.img_enc.eval()
+        for param in self.img_enc.parameters():
+            param.requires_grad = True
+        for param in self.txt_enc.parameters():
+            param.requires_grad = False				
+        for param in self.aud_enc.parameters():
+            param.requires_grad = True	
+        self.img_enc.train()	
+        self.aud_enc.train()
+        # self.txt_enc.train()
     def val_start(self):
         """switch to evaluate mode
         """
@@ -437,12 +456,15 @@ class VSE(object):
 
 		# compute the embeddings
 		img_emb, cap_emb, aud_emb = self.forward_emb(images, captions, audios, lengths=lengths)
-		# pdb.set_trace()
+
 		# measure accuracy and record loss
 		self.optimizer.zero_grad()
 		if train_with_audio:
-			loss = self.forward_loss(cap_emb, aud_emb)
+			# img_emb, aud_emb = self.shared_layer(img_emb, aud_emb)
+			# print('-----Yes------')
+			loss = self.forward_loss(img_emb, aud_emb)
 		else:
+			# img_emb, cap_emb = self.shared_layer(img_emb, cap_emb)
 			loss = self.forward_loss(img_emb,cap_emb)
 		
 		# compute gradient and do SGD step

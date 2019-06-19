@@ -247,7 +247,7 @@ def validate(opt, val_loader, model, audio):
 	logging.info("text to audio: %.1f, %.1f, %.1f, %.1f, %.1f" %
 				 (r1ca, r5ca, r10ca, medrca, meanrca))	
 	 # audio to caption retrieval
-	(r1ac, r5ac, r10ac, medrac, meanrac) = t2i(cap_embs, aud_embs, measure=opt.measure)
+	(r1ac, r5ac, r10ac, medrac, meanrac) = i2t(aud_embs, cap_embs, measure=opt.measure, npts=5000)
 	logging.info("audio to text: %.1f, %.1f, %.1f, %.1f, %.1f" %
 				 (r1ac, r5ac, r10ac, medrac, meanrac))					 
 	# sum of recalls to be used for early stopping
