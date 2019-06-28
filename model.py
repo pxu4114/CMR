@@ -3,6 +3,8 @@ import torch.nn as nn
 import torch.nn.init
 import torchvision.models as models
 from torch.autograd import Variable
+import torch.nn.functional as F
+from torch.nn.functional import softmax
 from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 import torch.backends.cudnn as cudnn
 from torch.nn.utils.clip_grad import clip_grad_norm
@@ -277,6 +279,28 @@ class shared_layer(nn.Module):
     def forward(self, emb_a, emb_b):
         return self.fc(emb_a), self.fc(emb_b)
 
+
+def attention(embed_size, audio, emb_one, emb_two):
+    w11 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
+    w12 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
+    w13 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
+    w14 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
+    w_one = torch.mm(emb_one, w11)
+    w_two = torch.mm(emb_two, w12)
+    w_ot = torch.mm(emb_one * emb_two, w13)
+    w_add = w_one + w_two + w_ot
+    # pdb.set_trace()
+    w_add = F.tanh(w_add)
+    w_one_norm = softmax(torch.mm(w_add,w14)) * emb_one + emb_one
+    w_two_norm = softmax(torch.mm(w_add,w14)) * emb_two + emb_two
+    norm1 = w_one_norm.norm(p=2, dim=1, keepdim=True)
+    w_one_norm = w_one_norm.div(norm1.expand_as(w_one_norm))    
+    norm2 = w_two_norm.norm(p=2, dim=1, keepdim=True)
+    w_two_norm = w_two_norm.div(norm2.expand_as(w_two_norm))
+    return w_one_norm, w_two_norm
+	
+
+
 def cosine_sim(im, s):
     """Cosine similarity between all the image and sentence pairs
     """
@@ -355,7 +379,7 @@ class VSE(object):
                                    opt.embed_size, opt.num_layers,
                                    use_abs=opt.use_abs)
                                    
-        self.aud_enc = EncodeAudio(opt.aud_dim, opt.embed_size, use_abs=opt.use_abs) 
+        self.aud_enc = EncodeAudio(opt.aud_dim, opt.embed_size, use_abs=opt.use_abs)
 
         self.shared_layer = shared_layer(opt.embed_size, use_abs=opt.use_abs)
         
@@ -400,7 +424,7 @@ class VSE(object):
         # for param in self.txt_enc.parameters():
             # param.requires_grad = True	            
         self.img_enc.train()
-        self.txt_enc.train()    
+        self.txt_enc.train() 		
         
     def train2_start(self):
         """switch to train mode
@@ -448,27 +472,28 @@ class VSE(object):
         return loss
 
     def train_emb(self, train_with_audio, images, captions, audios, lengths, ids=None, *args):
-		"""One training step given images and captions.
-		"""
-		self.Eiters += 1
-		self.logger.update('Eit', self.Eiters)
-		self.logger.update('lr', self.optimizer.param_groups[0]['lr'])
+        """One training step given images and captions.
+        """
+        self.Eiters += 1
+        self.logger.update('Eit', self.Eiters)
+        self.logger.update('lr', self.optimizer.param_groups[0]['lr'])
 
-		# compute the embeddings
-		img_emb, cap_emb, aud_emb = self.forward_emb(images, captions, audios, lengths=lengths)
-
-		# measure accuracy and record loss
-		self.optimizer.zero_grad()
-		if train_with_audio:
-			# img_emb, aud_emb = self.shared_layer(img_emb, aud_emb)
-			# print('-----Yes------')
-			loss = self.forward_loss(img_emb, aud_emb)
-		else:
-			# img_emb, cap_emb = self.shared_layer(img_emb, cap_emb)
-			loss = self.forward_loss(img_emb,cap_emb)
-		
-		# compute gradient and do SGD step
-		loss.backward()
-		if self.grad_clip > 0:
-			clip_grad_norm(self.params, self.grad_clip)
-		self.optimizer.step()
+        # compute the embeddings
+        img_emb, cap_emb, aud_emb = self.forward_emb(images, captions, audios, lengths=lengths)		
+        
+        # measure accuracy and record loss
+        self.optimizer.zero_grad()
+        if train_with_audio:
+            # img_emb, aud_emb = self.shared_layer(img_emb, aud_emb)
+            img_emb, aud_emb = attention(1024, True, img_emb, aud_emb)
+            loss = self.forward_loss(img_emb, aud_emb)
+        else:
+            # img_emb, cap_emb = self.shared_layer(img_emb, cap_emb)
+            img_emb, cap_emb = attention(1024, True,img_emb, aud_emb)
+            loss = self.forward_loss(img_emb,cap_emb)
+        
+        # compute gradient and do SGD step
+        loss.backward()
+        if self.grad_clip > 0:
+            clip_grad_norm(self.params, self.grad_clip)
+        self.optimizer.step()

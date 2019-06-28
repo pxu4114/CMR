@@ -57,10 +57,10 @@ def main(args):
         base_model = VGG19(weights='imagenet')
         model = Model(inputs=base_model.input, outputs=base_model.get_layer('fc2').output)		
         image_features = []
-        for i,path in enumerate(new_image_id):
-            path = "%012d" % (path,)
+        for i in range(len(new_image_id)/5):
+            path = "%012d" % (new_image_id[i*5],)
         # /shared/kgcoe-research/mil/video_project/mscoco_skipthoughts/images/train2014/COCO_train2014_000000000009.jpg
-            if i % 1000 == 0 and i != 0 : print('Extracted {}/{} features'.format(i,len(new_image_id)))
+            if i % 1000 == 0 and i != 0 : print('Extracted {}/{} features'.format(i,len(new_image_id)/5))
             img_path = '/shared/kgcoe-research/mil/video_project/mscoco_skipthoughts/images/train2014/COCO_train2014_{}.jpg'.format(path)	
             img = image.load_img(img_path, target_size=(224, 224))
             img_data = image.img_to_array(img)
@@ -84,7 +84,7 @@ if __name__=="__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument('--save_path', type = str, default = '/shared/kgcoe-research/mil/multi_modal_instance/new_data/coco_precomp', help = 'path to save the features')
     parser.add_argument('--data_path', type = str, default = '/shared/kgcoe-research/mil/Flickr8k_Audio/flickr_audio/wavs/', help = 'path to wav files')
-    parser.add_argument('--mode', type=str, default='train', help='Feature extraction for which phase?')
+    parser.add_argument('--mode', type=str, default='test', help='Feature extraction for which phase?')
     parser.add_argument('--extract_image_features', action='store_false')
     parser.add_argument('--extract_text', action='store_false')
     parser.add_argument('--extract_audio', action='store_false')
