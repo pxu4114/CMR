@@ -3,6 +3,7 @@ import os
 import time
 import shutil
 
+import tensorboard_logger as tb_logger
 import torch
 
 import data
@@ -11,7 +12,7 @@ from model import VSE
 from evaluation import i2t, t2i, AverageMeter, LogCollector, encode_data
 
 import logging
-import tensorboard_logger as tb_logger
+#import tensorboard_logger as tb_logger
 
 import argparse
 import pdb
@@ -184,7 +185,7 @@ def train(opt, train_loader, model, epoch, val_loader, audio):
                 model.train2_start()
             else:
                 model.train_start()
-        # pdb.set_trace()
+        pdb.set_trace()
         # measure data loading time
         data_time.update(time.time() - end)
 
