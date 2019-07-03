@@ -281,23 +281,21 @@ class shared_layer(nn.Module):
 
 
 def attention(embed_size, audio, emb_one, emb_two):
-    w11 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
-    w12 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
-    w13 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
-    w14 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
-    w_one = torch.mm(emb_one, w11)
-    w_two = torch.mm(emb_two, w12)
-    w_ot = torch.mm(emb_one * emb_two, w13)
-    w_add = w_one + w_two + w_ot
-    # pdb.set_trace()
-    w_add = F.tanh(w_add)
-    w_one_norm = softmax(torch.mm(w_add,w14)) * emb_one + emb_one
-    w_two_norm = softmax(torch.mm(w_add,w14)) * emb_two + emb_two
-    norm1 = w_one_norm.norm(p=2, dim=1, keepdim=True)
-    w_one_norm = w_one_norm.div(norm1.expand_as(w_one_norm))    
-    norm2 = w_two_norm.norm(p=2, dim=1, keepdim=True)
-    w_two_norm = w_two_norm.div(norm2.expand_as(w_two_norm))
-    return w_one_norm, w_two_norm
+	w11 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
+	w12 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
+	w13 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
+	w14 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
+	w_one = torch.mm(emb_one, w11)
+	w_two = torch.mm(emb_two, w12)
+	w_ot = torch.mm(emb_one * emb_two, w13)
+	w_add = w_one + w_two + w_ot
+	# pdb.set_trace()
+	w_add = F.tanh(w_add)
+	w_one_norm = softmax(torch.mm(w_add,w14)) * emb_one + emb_one
+	w_two_norm = softmax(torch.mm(w_add,w14)) * emb_two + emb_two
+	w_one_norm = l2norm(w_one_norm)
+	w_two_norm = l2norm(w_two_norm)
+	return w_one_norm, w_two_norm
 	
 
 
@@ -489,7 +487,7 @@ class VSE(object):
             loss = self.forward_loss(img_emb, aud_emb)
         else:
             # img_emb, cap_emb = self.shared_layer(img_emb, cap_emb)
-            img_emb, cap_emb = attention(1024, True,img_emb, aud_emb)
+            img_emb, cap_emb = attention(1024, True,img_emb, cap_emb)
             loss = self.forward_loss(img_emb,cap_emb)
         
         # compute gradient and do SGD step
