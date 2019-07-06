@@ -281,18 +281,21 @@ class shared_layer(nn.Module):
 
 
 def attention(embed_size, audio, emb_one, emb_two):
-	w11 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
-	w12 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
-	w13 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
-	w14 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.0001, -0.0001), requires_grad=True).cuda()
+	w11 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.01, -0.01), requires_grad=True).cuda()
+	w12 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.01, -0.01), requires_grad=True).cuda()
+	w13 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.01, -0.01), requires_grad=True).cuda()
+	w14 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.01, -0.01), requires_grad=True).cuda()
+	w15 = Variable(torch.FloatTensor(embed_size, embed_size).uniform_(0.01, -0.01), requires_grad=True).cuda()
 	w_one = torch.mm(emb_one, w11)
 	w_two = torch.mm(emb_two, w12)
 	w_ot = torch.mm(emb_one * emb_two, w13)
 	w_add = w_one + w_two + w_ot
 	# pdb.set_trace()
-	w_add = F.tanh(w_add)
-	w_one_norm = softmax(torch.mm(w_add,w14)) * emb_one + emb_one
-	w_two_norm = softmax(torch.mm(w_add,w14)) * emb_two + emb_two
+	# w_add = F.tanh(w_add)
+	# w_one_norm = softmax(torch.mm(w_add,w14)) * emb_one + emb_one
+	# w_two_norm = softmax(torch.mm(w_add,w15)) * emb_two + emb_two
+	w_one_norm = softmax(w_add) * emb_one + emb_one
+	w_two_norm = softmax(w_add) * emb_two + emb_two
 	w_one_norm = l2norm(w_one_norm)
 	w_two_norm = l2norm(w_two_norm)
 	return w_one_norm, w_two_norm
@@ -369,6 +372,7 @@ class VSE(object):
         # tutorials/09 - Image Captioning
         # Build Models
         self.grad_clip = opt.grad_clip
+        self.embed_size = opt.embed_size
         self.img_enc = EncoderImage(opt.data_name, opt.img_dim, opt.embed_size,
                                     opt.finetune, opt.cnn_type,
                                     use_abs=opt.use_abs,
@@ -483,11 +487,11 @@ class VSE(object):
         self.optimizer.zero_grad()
         if train_with_audio:
             # img_emb, aud_emb = self.shared_layer(img_emb, aud_emb)
-            img_emb, aud_emb = attention(1024, True, img_emb, aud_emb)
+            img_emb, aud_emb = attention(self.embed_size, True, img_emb, aud_emb)
             loss = self.forward_loss(img_emb, aud_emb)
         else:
             # img_emb, cap_emb = self.shared_layer(img_emb, cap_emb)
-            img_emb, cap_emb = attention(1024, True,img_emb, cap_emb)
+            img_emb, cap_emb = attention(self.embed_size, False,img_emb, cap_emb)
             loss = self.forward_loss(img_emb,cap_emb)
         
         # compute gradient and do SGD step

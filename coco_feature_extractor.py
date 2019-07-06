@@ -47,38 +47,41 @@ def main(args):
 	new_index = sorted(range(len(new_image_id)), key=lambda k: new_image_id[k])
 	new_image_id.sort()
 	new_captions = [new_captions[i] for i in new_index]
+	new_caption_id = [new_caption_id[i] for i in new_index]
 
 	if args.extract_audio:
 		file = glob.glob(args.data_path + '/*')
-		json_file_path = glob.glob('/shared/kgcoe-research/mil/SpeechCOCO_2014/train2014/json/' + '*')
+		# json_file_path = glob.glob('/shared/kgcoe-research/mil/SpeechCOCO_2014/val2014/json/' + '*')
 		# cap=[]
 		# for i in range(len(json_file_path)):
 			# f=open(json_file_path[i])
 			# f=json.load(f)
 			# cap.append(f['synthesisedCaption'])
-		cap_id = [i.split('/')[-1].split('_')[1] for i in file]
-		img_id = [i.split('/')[-1].split('_')[0] for i in file]
-		uni = np.unique(np.asarray(img_id))
-		new_index = sorted(range(len(img_id)), key=lambda k: img_id[k])
-		img_id.sort()
-		new_file_path = [file[i] for i in new_index]		
-		# new_cap = [cap[i] for i in new_index]		
-		pdb.set_trace()
-		
-		
+		cap_id = [int(i.split('/')[-1].split('_')[1]) for i in file]
+		img_id = [int(i.split('/')[-1].split('_')[0]) for i in file]
+		uni = np.unique(np.asarray(img_id))	
+		new_index = []
+		for j in range(len(new_caption_id)):
+			temp = cap_id.index(new_caption_id[j])
+			new_index.append(temp)
+		new_cap_id = [cap_id[i] for i in new_index]		
+		# new_cap = [cap[i] for i in new_index]
+		new_file_path = [file[i] for i in new_index]	
+		pdb.set_trace()	
+			
 	audio_stack = np.array([])
-	for i in range(0,len(audio)):
-		if i%100 == 0 and i!=0 : print('extracted {}/{}'.format(i, len(audio)))
-		af = audiofile_to_input_vector(os.path.join(args.data_path, audio[i]),40,29)
+	for i in range(len(new_file_path)):
+		if i%1000 == 0 and i!=0 : print('extracted {}/{}'.format(i, len(new_file_path)))
+		af = audiofile_to_input_vector(new_file_path[i],30,29)
 		# pdb.set_trace()
-		avg = np.reshape(af,(1,40))
+		avg = np.reshape(af,(1,30))
 		
 		if len(audio_stack.shape)>1:
 			audio_stack = np.vstack((audio_stack,avg))
 		else:
 			audio_stack = avg
 	# pdb.set_trace()
-	np.save(os.path.join(args.save_path, '{}_aud.npy'.format(mode)), audio_stack)
+	np.save(os.path.join(args.save_path, '{}_aud.npy'.format(args.mode)), audio_stack)
 	print('done extracting audio features')
 
 
@@ -116,8 +119,8 @@ def main(args):
 if __name__=="__main__":
     parser=argparse.ArgumentParser()
     parser.add_argument('--save_path', type = str, default = '/shared/kgcoe-research/mil/multi_modal_instance/new_data/coco_precomp', help = 'path to save the features')
-    parser.add_argument('--data_path', type = str, default = '/shared/kgcoe-research/mil/SpeechCOCO_2014/train2014/wav/', help = 'path to wav files')
-    parser.add_argument('--mode', type=str, default='train', help='Feature extraction for which phase?')
+    parser.add_argument('--data_path', type = str, default = '/shared/kgcoe-research/mil/SpeechCOCO_2014/val2014/wav/', help = 'path to wav files')
+    parser.add_argument('--mode', type=str, default='dev', help='Feature extraction for which phase?')
     parser.add_argument('--extract_image_features', action='store_true')
     parser.add_argument('--extract_text', action='store_true')
     parser.add_argument('--extract_audio', action='store_false')
