@@ -22,13 +22,13 @@ def main():
 	parser = argparse.ArgumentParser()
 	parser.add_argument('--data_path', default='/shared/kgcoe-research/mil/multi_modal_instance/new_data/',
 						help='path to datasets')
-	parser.add_argument('--data_name', default='f8k_precomp',
+	parser.add_argument('--data_name', default='coco_precomp',
 						help='{coco,f8k,f30k,10crop}_precomp|coco|f8k|f30k')
 	parser.add_argument('--vocab_path', default='/shared/kgcoe-research/mil/multi_modal_instance/vocab/',
 						help='Path to saved vocabulary pickle files.')
 	parser.add_argument('--margin', default=0.2, type=float,
 						help='Rank loss margin.')
-	parser.add_argument('--num_epochs', default=15, type=int,
+	parser.add_argument('--num_epochs', default=30, type=int,
 						help='Number of training epochs.')
 	parser.add_argument('--batch_size', default=128, type=int,
 						help='Size of a training mini-batch.')
@@ -48,7 +48,7 @@ def main():
 						help='Number of epochs to update the learning rate.')
 	parser.add_argument('--workers', default=10, type=int,
 						help='Number of data loader workers.')
-	parser.add_argument('--log_step', default=50, type=int,
+	parser.add_argument('--log_step', default=1000, type=int,
 						help='Number of steps to print and record the log.')
 	parser.add_argument('--val_step', default=500, type=int,
 						help='Number of steps to run validation.')
@@ -60,7 +60,7 @@ def main():
 						help='Use max instead of sum in the rank loss.')
 	parser.add_argument('--img_dim', default=4096, type=int,
 						help='Dimensionality of the image embedding.')    
-	parser.add_argument('--aud_dim', default=40, type=int,
+	parser.add_argument('--aud_dim', default=30, type=int,
 						help='Dimensionality of the image embedding.')
 	parser.add_argument('--finetune', action='store_true',
 						help='Fine-tune the image encoder.')

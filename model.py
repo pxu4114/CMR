@@ -52,7 +52,7 @@ class EncodeAudioPrecomp(nn.Module):
 		self.fc1 = nn.Linear(embed_size, embed_size)
 		# self.fc2 = nn.Linear(embed_size, embed_size)
 		self.tanh = nn.Tanh()
-		# self.init_weights()
+		self.init_weights()
 	def init_weights(self):
 		"""Xavier initialization for the fully connected layer
 		"""
@@ -291,9 +291,9 @@ def attention(embed_size, audio, emb_one, emb_two):
 	w_ot = torch.mm(emb_one * emb_two, w13)
 	w_add = w_one + w_two + w_ot
 	# pdb.set_trace()
-	# w_add = F.tanh(w_add)
-	# w_one_norm = softmax(torch.mm(w_add,w14)) * emb_one + emb_one
-	# w_two_norm = softmax(torch.mm(w_add,w15)) * emb_two + emb_two
+	w_add = F.tanh(w_add)
+	w_one_norm = softmax(torch.mm(w_add,w14)) * emb_one + emb_one
+	w_two_norm = softmax(torch.mm(w_add,w15)) * emb_two + emb_two
 	w_one_norm = softmax(w_add) * emb_one + emb_one
 	w_two_norm = softmax(w_add) * emb_two + emb_two
 	w_one_norm = l2norm(w_one_norm)
