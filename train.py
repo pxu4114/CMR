@@ -185,7 +185,7 @@ def train(opt, train_loader, model, epoch, val_loader, audio):
                 model.train2_start()
             else:
                 model.train_start()
-        pdb.set_trace()
+        #pdb.set_trace()
         # measure data loading time
         data_time.update(time.time() - end)
 

@@ -221,6 +221,7 @@ class PrecompDataset(data.Dataset):
 			self.length = 5000
 			
 		# audio loader
+        #### CHANGE PATH
 		self.audios = np.load(loc+'%s_aud.npy' % data_split)
 
     def __getitem__(self, index):
